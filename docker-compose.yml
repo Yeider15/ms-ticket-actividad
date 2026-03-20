@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # Servicio 1: Base de Datos PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: tickets_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1523
+      - POSTGRES_DB=sistema_tickets
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Servicio 2: API Node.js
+  api:
+    build: .
+    container_name: tickets_api
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

@@ -2,7 +2,6 @@ const db = require('../db/database');
 
 const ticketRepository = {
     crear: async (ticketModel) => {
-        // Recibe el objeto Ticket y lo inserta en la DB
         const [nuevo] = await db('tickets')
             .insert({
                 titulo: ticketModel.titulo,

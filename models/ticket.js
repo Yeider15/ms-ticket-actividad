@@ -7,7 +7,7 @@ class Ticket {
         
         this.titulo = titulo;
         this.descripcion = descripcion;
-        this.estado = 'abierto'; // Estado por defecto dictado por el negocio
+        this.estado = 'abierto';
     }
 }
 

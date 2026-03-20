@@ -40,30 +40,155 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+.gitignore
 controllers/ticketController.js
 db/database.js
+docker-compose.yml
+Dockerfile
 index.js
 models/ticket.js
 package.json
 repositories/ticketRepository.js
 services/ticketService.js
+strategies/notificacionStrategy.js
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
 
+<file path="docker-compose.yml">
+version: '3.8'
+
+services:
+  # Servicio 1: Base de Datos PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: tickets_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1523
+      - POSTGRES_DB=sistema_tickets
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Servicio 2: API Node.js
+  api:
+    build: .
+    container_name: tickets_api
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
+</file>
+
+<file path="Dockerfile">
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["node", "index.js"]
+</file>
+
+<file path="strategies/notificacionStrategy.js">
+class INotificacionStrategy {
+    enviar(destino) {
+        throw new Error("El método enviar() debe ser implementado");
+    }
+}
+
+// Estrategia 1: WhatsApp
+class WhatsAppStrategy extends INotificacionStrategy {
+    enviar(destino) {
+        console.log(`[SIMULACIÓN STRATEGY] Enviando WhatsApp al contacto ${destino}...`);
+    }
+}
+
+// Estrategia 2: SMS
+class SMSStrategy extends INotificacionStrategy {
+    enviar(destino) {
+        console.log(`[SIMULACIÓN STRATEGY] Enviando SMS al número ${destino}...`);
+    }
+}
+
+// Estrategia 3: Email
+class EmailStrategy extends INotificacionStrategy {
+    enviar(destino) {
+        console.log(`[SIMULACIÓN STRATEGY] Enviando Email a la dirección ${destino}...`);
+    }
+}
+
+module.exports = {
+    WhatsAppStrategy,
+    SMSStrategy,
+    EmailStrategy
+};
+</file>
+
+<file path=".gitignore">
+# Dependencias
+node_modules/
+
+# Archivos de entorno (Seguridad)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs de npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Basura del sistema operativo (Windows/Mac)
+.DS_Store
+Thumbs.db
+
+# Carpetas de testing (por si a futuro agregas pruebas)
+coverage/
+</file>
+
 <file path="controllers/ticketController.js">
 const ticketService = require('../services/ticketService');
+const { WhatsAppStrategy, SMSStrategy, EmailStrategy } = require('../strategies/notificacionStrategy');
 
 const ticketController = {
   postTicket: async (req, res) => {
     try {
-      const { titulo, descripcion } = req.body;
-      const ticket = await ticketService.registrar(titulo, descripcion);
+      const { titulo, descripcion, metodoNotificacion, destino } = req.body;
+      
+      let estrategia;
+      switch (metodoNotificacion) {
+        case 'sms':
+          estrategia = new SMSStrategy();
+          break;
+        case 'email':
+          estrategia = new EmailStrategy();
+          break;
+        case 'whatsapp':
+        default:
+          estrategia = new WhatsAppStrategy(); 
+          break;
+      }
+
+      const ticket = await ticketService.registrar(titulo, descripcion, estrategia, destino);
       res.status(201).json(ticket);
     } catch (err) {
-      // Capturamos el error del modelo (ej: "El título no puede estar vacío")
-      // y respondemos con un 400 Bad Request, que es el código correcto para datos inválidos
       res.status(400).json({ error: err.message });
     }
   },
@@ -87,7 +212,7 @@ const knex = require("knex");
 const db = knex({
   client: "pg",
   connection: {
-    host: "127.0.0.1",
+  host: process.env.DB_HOST || "127.0.0.1",
     port: 5432,
     user: "postgres",
     password: "1523",
@@ -124,7 +249,7 @@ class Ticket {
         
         this.titulo = titulo;
         this.descripcion = descripcion;
-        this.estado = 'abierto'; // Estado por defecto dictado por el negocio
+        this.estado = 'abierto';
     }
 }
 
@@ -161,7 +286,6 @@ const db = require('../db/database');
 
 const ticketRepository = {
     crear: async (ticketModel) => {
-        // Recibe el objeto Ticket y lo inserta en la DB
         const [nuevo] = await db('tickets')
             .insert({
                 titulo: ticketModel.titulo,
@@ -184,22 +308,15 @@ module.exports = ticketRepository;
 const Ticket = require("../models/ticket");
 const ticketRepository = require("../repositories/ticketRepository");
 
-async function enviarNotificacionSimulada(tipo, destino) {
-  console.log(`[SIMULACIÓN] Enviando notificación por ${tipo} al contacto ${destino}...`);
-}
-
 const ticketService = {
-  registrar: async (titulo, descripcion) => {
-    // 1. Usamos el MODELO para instanciar un nuevo Ticket en memoria
-    // Si no hay título, el Modelo lanzará un error aquí mismo y detendrá la ejecución
+  registrar: async (titulo, descripcion, estrategiaNotificacion, destino) => {
     const nuevoTicket = new Ticket(titulo, descripcion);
 
-    // 2. Usamos el REPOSITORIO para guardarlo en la Base de Datos
     const ticketGuardado = await ticketRepository.crear(nuevoTicket);
 
-    // 3. Notificación (Regla de negocio)
-    // Ahora garantizamos que solo se envíe si el ticket pasó la validación y se guardó en la DB
-    await enviarNotificacionSimulada("WhatsApp", "+56912345678");
+    if (estrategiaNotificacion && destino) {
+      estrategiaNotificacion.enviar(destino);
+    }
 
     return ticketGuardado;
   },
