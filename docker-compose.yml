@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Servicio 1: Base de Datos PostgreSQL
   db:
     image: postgres:15-alpine
     container_name: tickets_db
@@ -13,8 +12,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  # Servicio 2: API Node.js
   api:
     build: .
     container_name: tickets_api
